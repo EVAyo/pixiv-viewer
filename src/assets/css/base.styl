@@ -9,7 +9,6 @@
 html, body {
   font-family: 'Noto Sans SC', sans-serif;
   color: #333;
-  overscroll-behavior: none;
   user-select: none;
   height: 100%;
   touch-action: pan-x pan-y;
@@ -20,7 +19,11 @@ html {
   overflow-y: scroll;
   box-sizing: border-box;
   overscroll-behavior: none;
-  scroll-behavior: smooth;
+  touch-action: manipulation;
+
+  &.no-scroll {
+    overflow: hidden;
+  }
 }
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;700&display=swap');
@@ -98,6 +101,11 @@ html {
       }
     }
   }
+}
+
+.van-tag {
+  padding: 4px 8px;
+  font-size: 15px;
 }
 
 .censored {

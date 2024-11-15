@@ -12,7 +12,7 @@ export default new Vuex.Store({
     $swiper: null,
     searchHistory: LocalStorage.get('__PIXIV_searchHistory', []),
     SETTING: LocalStorage.get('__PIXIV_SETTING', {
-      api: "https://hibiapi.journeyad.repl.co/api/",
+      api: "https://hibiapi.getloli.com/api/",
       r18: false,
       r18g: false
     }),
@@ -45,14 +45,16 @@ export default new Vuex.Store({
         state.searchHistory = []
         LocalStorage.remove('__PIXIV_searchHistory')
       } else {
-        if (state.searchHistory.includes(obj)) return false
-        if (state.searchHistory.length >= 20) state.searchHistory.shift()
-        state.searchHistory.push(obj)
+        if (state.searchHistory.includes(obj)) state.searchHistory.splice(state.searchHistory.indexOf(obj), 1)
+
+        if (state.searchHistory.length >= 20) state.searchHistory.pop()
+        state.searchHistory.unshift(obj)
+
         LocalStorage.set('__PIXIV_searchHistory', state.searchHistory)
       }
     },
     saveSETTING(state, obj) {
-      state.SETTING = obj
+      Vue.set(state, 'SETTING', Object.assign({}, state.SETTING, obj))
       LocalStorage.set('__PIXIV_SETTING', state.SETTING)
     }
   },

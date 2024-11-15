@@ -1,6 +1,6 @@
 import { get } from './http'
 import { DBStorage, Expires } from '@/utils/storage'
-import moment from 'moment'
+import dayjs from 'dayjs'
 import { Base64 } from 'js-base64';
 
 const isSupportWebP = (() => {
@@ -15,8 +15,14 @@ const isSupportWebP = (() => {
   return false;
 })();
 
+const imgProxyList = [
+  'pximg.jad-sub-0.workers.dev',
+  'pximg.jad-sub-1.workers.dev',
+  'pximg.jad-sub-2.workers.dev',
+]
+
 const imgProxy = url => {
-  let result = url.replace(/i.pximg.net/g, 'pximg.pixiv-viewer.workers.dev')
+  let result = url.replace(/i.pximg.net/g, imgProxyList[Math.floor(Math.random() * imgProxyList.length)])
 
   if (!isSupportWebP) {
     result = result.replace(/_10_webp/g, '_70')
@@ -98,6 +104,28 @@ const parseIllust = data => {
   }
 
   return artwork
+}
+
+const parseNovel = data => {
+  const result = {
+    ...data,
+    images: {
+      s: imgProxy(data.image_urls.square_medium),
+      m: imgProxy(data.image_urls.medium),
+      l: imgProxy(data.image_urls.large),
+    },
+    author: {
+      id: data.user.id,
+      name: data.user.name,
+      avatar: imgProxy(data.user.profile_image_urls.medium)
+    },
+    count: data.page_count,
+    view: data.total_view,
+    like: data.total_bookmarks,
+  }
+  result.user.profile_image_urls.medium = imgProxy(data.user.profile_image_urls.medium)
+
+  return result
 }
 
 const api = {
@@ -219,8 +247,8 @@ const api = {
    * @param {Number} page 页数 
    * @param {String} date YYYY-MM-DD 默认为「前天」
    */
-  async getRankList(mode = 'weekly', page = 1, date = moment().subtract(2, 'days').format('YYYY-MM-DD')) {
-    date = moment(date).format('YYYY-MM-DD')
+  async getRankList(mode = 'weekly', page = 1, date = dayjs().subtract(2, 'days').format('YYYY-MM-DD')) {
+    date = dayjs(date).format('YYYY-MM-DD')
 
     const cache_key = `rankList_${mode}_${date}_${page}`
     let rankList = await DBStorage.get(cache_key)
@@ -265,21 +293,28 @@ const api = {
    * @param {String} word 关键词
    * @param {Number} page 页数 
    */
-  async search(word, page = 1) {
-    const cache_key = `searchList_${Base64.encode(word)}_${page}`
+  async search(word, page = 1, type = 'illust') {
+    const cache_key = `searchList_${type}_${Base64.encode(word)}_${page}`
     let searchList = await DBStorage.get(cache_key)
 
     if (!searchList) {
 
       let res = await get('/pixiv/', {
-        type: 'search',
+        type: type === 'novel' ? 'search_novel' : 'search',
         word,
         page
       })
 
-      let data
-      if (res.illusts) {
-        data = res.illusts
+      if (res.illusts || res.novels) {
+        if (type === 'illust') {
+          if (res.illusts) {
+            searchList = res.illusts.map(parseIllust)
+          }
+        } else if (type === 'novel') {
+          if (res.novels) {
+            searchList = res.novels.map(parseNovel)
+          }
+        }
       } else if (res.error) {
         return {
           status: -1,
@@ -291,10 +326,6 @@ const api = {
           msg: '未知错误'
         }
       }
-
-      searchList = data.map(art => {
-        return parseIllust(art)
-      })
 
       DBStorage.set(cache_key, searchList, Expires.hour(3))
     }
@@ -425,12 +456,18 @@ const api = {
       })
 
       let data
-      if (res.illusts) {
+      if (res.illusts.length) {
         data = res.illusts
       } else if (res.error) {
         return {
           status: -1,
           msg: res.error.user_message || res.error.message
+        }
+      } else if (!res.next_url) {
+        return {
+          status: 0,
+          data: [],
+          finished: true
         }
       } else {
         return {
@@ -532,6 +569,131 @@ const api = {
     }
 
     return { status: 0, data: tags }
-  }
+  },
+
+  /**
+   * 获取用户小说投稿
+   * @param {Number} id 作者ID
+   * @param {Number} page 页数 
+   */
+  async getMemberNovel(id, page = 1) {
+    const cache_key = `memberNovel_${id}_p${page}`
+    let memberNovel = await DBStorage.get(cache_key)
+
+    if (!memberNovel) {
+
+      let res = await get('/pixiv/', {
+        type: 'member_novel',
+        id,
+        page
+      })
+
+      let data
+      if (res.novels.length) {
+        data = res.novels
+      } else if (res.error) {
+        return {
+          status: -1,
+          msg: res.error.user_message || res.error.message
+        }
+      } else if (!res.next_url) {
+        return {
+          status: 0,
+          data: [],
+          finished: true
+        }
+      } else {
+        return {
+          status: -1,
+          msg: '未知错误'
+        }
+      }
+
+      memberNovel = data.map(art => {
+        return parseNovel(art)
+      })
+
+      DBStorage.set(cache_key, memberNovel, Expires.hour(3))
+    }
+
+    return { status: 0, data: memberNovel }
+  },
+
+  /**
+   * 获取小说详情
+   * @param {Number} id 小说ID
+   * @returns {Object}
+   */
+  async getNovel(id) {
+    const cache_key = `novel_${id}`
+    let novel = await DBStorage.get(cache_key)
+
+    if (!novel) {
+
+      const reqArr = [
+        get('/pixiv/', { type: 'novel_detail', id }),
+        get('/pixiv/', { type: 'novel_text', id })
+      ]
+
+      const [detail, text] = await Promise.all(reqArr)
+
+      let data
+      if (detail.novel) {
+        data = {
+          ...detail.novel,
+          content: text.novel_text
+        }
+      } else if (detail.error) {
+        return {
+          status: -1,
+          msg: detail.error.user_message || detail.error.message
+        }
+      } else {
+        return {
+          status: -1,
+          msg: '未知错误'
+        }
+      }
+
+      novel = parseNovel(data)
+
+      DBStorage.set(cache_key, novel, Expires.MONTH)
+    }
+
+
+    return { status: 0, data: novel }
+  },
+
+  async getNovelText(id) {
+    const cache_key = `novel_text_${id}`
+    let novel = await DBStorage.get(cache_key)
+
+    if (!novel) {
+
+      let res = await get('/pixiv/', {
+        type: 'novel_text',
+        id
+      })
+
+      if (res.illust) {
+        novel = res.illust
+      } else if (res.error) {
+        return {
+          status: -1,
+          msg: res.error.user_message || res.error.message
+        }
+      } else {
+        return {
+          status: -1,
+          msg: '未知错误'
+        }
+      }
+
+      DBStorage.set(cache_key, novel, Expires.MONTH)
+    }
+
+
+    return { status: 0, data: novel }
+  },
 }
 export default api

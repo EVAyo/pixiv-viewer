@@ -12,6 +12,7 @@
 
 <script>
 import Preload from "@/components/Preload";
+import { mapState, mapActions } from "vuex";
 
 export default {
   name: "App",
@@ -20,7 +21,11 @@ export default {
       isTopShow: false,
     };
   },
+  computed: {
+    ...mapState(["SETTING"]),
+  },
   methods: {
+    ...mapActions(["saveSETTING"]),
     toTop() {
       document.documentElement.scrollTo({ top: 0, behavior: "smooth" });
     },
@@ -31,6 +36,16 @@ export default {
         this.isTopShow = false;
       }
     },
+  },
+  beforeMount() {
+    const { r18 } = this.$route.query;
+
+    if (+r18 === 1) {
+      this.saveSETTING({
+        ...this.SETTING,
+        r18: true,
+      });
+    }
   },
   mounted() {
     window.addEventListener("scroll", this.scrollHandler);
@@ -54,6 +69,7 @@ export default {
   &.show-nav {
     .back-top {
       bottom: 130px;
+      bottom: calc(130px + env(safe-area-inset-bottom));
     }
   }
 
@@ -61,6 +77,7 @@ export default {
     position: fixed;
     right: 40px;
     bottom: 40px;
+    bottom: calc(40px + env(safe-area-inset-bottom));
     cursor: pointer;
 
     .icon-top {
@@ -73,6 +90,12 @@ export default {
 @media screen and (min-width: 768px) {
   #app {
     max-width: 1200px;
+  }
+}
+
+@media screen and (min-width: 1700px) {
+  #app {
+    max-width: 1600px;
   }
 }
 </style>

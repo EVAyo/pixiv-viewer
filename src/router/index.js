@@ -1,6 +1,6 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
-// import Home from '../views/Home.vue'
+import { setThemeColor } from '@/utils';
 
 import BaseLayout from '@/layouts/BaseLayout'
 import MainLayout from '@/layouts/MainLayout'
@@ -12,6 +12,7 @@ import Rank from '@/views/Rank'
 import Setting from '@/views/Setting'
 import Artwork from '@/views/Artwork'
 import Users from '@/views/Users'
+import NovelChapter from '@/views/Novel/chapter'
 
 const initLength = window.history.length
 Object.defineProperty(VueRouter.prototype, '$historyCount', {
@@ -76,6 +77,11 @@ const routes = [
             path: '/users/:id',
             name: 'Users',
             component: Users
+          },
+          {
+            path: '/novel/:id',
+            name: 'Novel',
+            component: NovelChapter
           }
         ]
       }
@@ -93,6 +99,14 @@ const routes = [
 
 const router = new VueRouter({
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  document.title = to.meta.title || 'pixiv-viewer'
+
+  setThemeColor(to.meta.themeColor || '#fff')
+
+  next()
 })
 
 export default router

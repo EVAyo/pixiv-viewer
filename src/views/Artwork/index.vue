@@ -95,10 +95,6 @@ export default {
       let id = +this.$route.params.id;
       this.artwork = {};
       this.getArtwork(id);
-
-      if(this.$route.length > 2) {
-        
-      }
     },
     async getArtwork(id) {
       // console.log(id);
@@ -107,10 +103,13 @@ export default {
         this.artwork = res.data;
         this.loading = false;
 
+        document.title = `${this.artwork.title} - ${this.artwork.author.name} - pixiv-viewer`;
+
         if (this.isCensored(this.artwork)) {
           this.$toast({
             message: "根据当前设置，此内容将不予显示",
             icon: require("@/svg/ban-view.svg"),
+            duration: 3000,
           });
           setTimeout(() => {
             // this.$router.back();
